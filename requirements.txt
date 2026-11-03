@@ -1,0 +1,7 @@
+# Exécution des tests
+robotframework==7.5.1
+robotframework-requests==0.9.7
+
+# Outils de développement
+robotcode-runner==2.8.0          # commande « robotcode » : lit robot.toml (profils)
+robotframework-robocop==9.1.2    # lint et formatage : robocop check / robocop format

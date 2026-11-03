@@ -1,0 +1,18 @@
+# Configuration de Robot Framework lue par RobotCode :
+#   - l'extension VS Code (boutons ▶ dans l'éditeur et vue « Testing ») ;
+#   - la commande « robotcode robot » (même exécution en ligne de commande).
+# La commande « robot » classique ne lit pas ce fichier : voir le README.
+
+name = "JSONPlaceholder API"
+paths = ["tests"]
+output-dir = "results"
+console-colors = "on"
+
+# Profils : robotcode -p <nom> robot
+[profiles.smoke]
+description = "Tests rapides de bon fonctionnement (tag smoke)"
+includes = ["smoke"]
+
+[profiles.erreurs]
+description = "Cas d'erreur uniquement (tag erreur)"
+includes = ["erreur"]

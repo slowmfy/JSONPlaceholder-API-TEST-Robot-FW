@@ -1,0 +1,13 @@
+# Environnement Python
+venv/
+__pycache__/
+
+# Résultats d'exécution Robot Framework (régénérés à chaque lancement)
+results/
+output.xml
+log.html
+report.html
+
+# Caches des outils
+.robotcode_cache/
+.ruff_cache/

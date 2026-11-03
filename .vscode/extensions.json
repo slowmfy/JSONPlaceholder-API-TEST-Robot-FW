@@ -1,0 +1,4 @@
+{
+  "recommendations": ["d-biehl.robotcode", "ms-python.python"],
+  "unwantedRecommendations": ["vivainio.robotframework"]
+}

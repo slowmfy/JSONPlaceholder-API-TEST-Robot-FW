@@ -1,0 +1,12 @@
+# Configuration de Robocop (lint et formatage des fichiers .robot / .resource).
+#   robocop check .     analyse le code
+#   robocop format .    reformate le code selon le style officiel
+
+exclude = ["venv/*", "results/*"]
+
+[lint]
+ignore = [
+    # MISC04 confond la syntaxe VAR de Robot Framework 7 (sans « = ») avec une
+    # affectation « ${x}= » incohérente : faux positif.
+    "MISC04",
+]
