@@ -10,7 +10,7 @@ Resource          ../resources/api.resource
 Suite Setup       Open API Session
 Suite Teardown    Close API Sessions
 
-Test Tags         erreur
+Test Tags         jsonplaceholder    erreur
 
 
 *** Test Cases ***

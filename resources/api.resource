@@ -5,8 +5,8 @@ Documentation    Mots-clés d'accès à l'API JSONPlaceholder.
 ...
 ...              1. *Session* : ouverture et fermeture de la connexion HTTP.
 ...              2. *Couche technique* (privée) : `Call API` est le seul mot-clé qui envoie
-...              des requêtes. En-têtes, journalisation ou authentification se changent ici,
-...              à un seul endroit.
+...              des requêtes à JSONPlaceholder. Il s'appuie sur ``http.resource``, partagé avec
+...              l'API web : en-têtes, journalisation ou authentification se changent à un seul endroit.
 ...              3. *Actions métier* : un mot-clé par action (`Get User`, `Create Post`...).
 ...              Ce sont les seuls que les tests utilisent : aucune URL n'apparaît dans les tests.
 ...              4. *Vérifications métier* : contrôles réutilisables sur les données renvoyées.
@@ -16,6 +16,7 @@ Documentation    Mots-clés d'accès à l'API JSONPlaceholder.
 
 Library          Collections
 Library          RequestsLibrary
+Resource         http.resource
 Variables        ../variables/environment.py
 
 
@@ -25,17 +26,9 @@ Variables        ../variables/environment.py
 # =====================================================================
 
 Open API Session
-    [Documentation]    Ouvre la session HTTP partagée par tous les tests d'une suite.
-    ...
-    ...    La session porte l'URL de base, le délai d'attente et les en-têtes communs :
-    ...    les mots-clés n'indiquent plus que le chemin (``/users``). Elle réutilise aussi
-    ...    la connexion TCP entre les appels, ce qui accélère la suite.
-    ...
-    ...    ``verify=\${True}`` est indispensable : par défaut, RequestsLibrary ne vérifie
-    ...    *pas* le certificat HTTPS du serveur (``verify=False``).
-    VAR    &{headers}    Accept=application/json
-    Create Session    ${API_SESSION}    ${BASE_URL}
-    ...    headers=${headers}    timeout=${TIMEOUT}    verify=${True}
+    [Documentation]    Ouvre la session HTTP vers JSONPlaceholder, partagée par tous les
+    ...    tests d'une suite (voir `Open HTTP Session` dans ``http.resource``).
+    Open HTTP Session    ${API_SESSION}    ${BASE_URL}    ${TIMEOUT}
 
 Close API Sessions
     [Documentation]    Ferme toutes les sessions HTTP ouvertes par la suite.
@@ -46,26 +39,19 @@ Close API Sessions
 # =====================================================================
 
 Call API
-    [Documentation]    Envoie une requête sur la session et renvoie le corps de la réponse.
+    [Documentation]    Envoie une requête à JSONPlaceholder et renvoie le corps de la réponse.
     ...
-    ...    - ``method`` : GET, POST, PUT, PATCH ou DELETE ;
-    ...    - ``endpoint`` : chemin relatif à ``\${BASE_URL}``, par exemple ``/users/1`` ;
-    ...    - ``expected_status`` : code HTTP attendu. RequestsLibrary fait échouer le test,
-    ...    avec l'URL et le code reçu, si la réponse en a un autre ;
-    ...    - ``options`` : paramètres transmis tels quels (``params=``, ``json=``...).
-    ...
-    ...    Le corps est renvoyé décodé s'il est en JSON, en texte brut sinon : l'API répond
-    ...    par exemple en HTML quand elle renvoie une erreur 500.
+    ...    Délègue à `Send Request On Session` (``http.resource``), commun à toutes les API
+    ...    testées, en fixant la session JSONPlaceholder. Arguments : méthode, chemin,
+    ...    code HTTP attendu et options transmises telles quelles (``params=``, ``json=``...).
     ...
     ...    Mot-clé privé (tag ``robot:private``) : Robot Framework émet un avertissement
     ...    si un test l'appelle directement au lieu de passer par une action métier.
     [Tags]    robot:private
     [Arguments]    ${method}    ${endpoint}    ${expected_status}    &{options}
-    ${response}=    Run Keyword    ${method} On Session    ${API_SESSION}    ${endpoint}
-    ...    expected_status=${expected_status}    &{options}
-    ${content_type}=    Evaluate    $response.headers.get("Content-Type", "")
-    IF    "json" in $content_type    RETURN    ${response.json()}
-    RETURN    ${response.text}
+    ${body}=    Send Request On Session    ${API_SESSION}    ${method}    ${endpoint}
+    ...    ${expected_status}    &{options}
+    RETURN    ${body}
 
 Build Post Payload
     [Documentation]    Construit le corps JSON d'un post au format attendu par l'API

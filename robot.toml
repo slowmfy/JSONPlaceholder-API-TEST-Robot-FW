@@ -16,3 +16,19 @@ includes = ["smoke"]
 [profiles.erreurs]
 description = "Cas d'erreur uniquement (tag erreur)"
 includes = ["erreur"]
+
+[profiles.jsonplaceholder]
+description = "API JSONPlaceholder uniquement, sans l'application web"
+includes = ["jsonplaceholder"]
+
+[profiles.web]
+description = "Application web : API FastAPI et interface Angular"
+includes = ["web"]
+
+[profiles.ui]
+description = "Interface Angular uniquement (navigateur)"
+includes = ["ui"]
+
+[profiles.invisible]
+description = "A combiner avec un autre profil : navigateur masqué (-p ui -p invisible)"
+variables = { HEADLESS = "True" }

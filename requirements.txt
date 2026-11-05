@@ -1,6 +1,11 @@
 # Exécution des tests
 robotframework==7.5.1
 robotframework-requests==0.9.7
+robotframework-browser==21.0.0   # tests d'interface (Playwright) : exige Node.js, puis « rfbrowser init »
+
+# Application web testée (app/) : API FastAPI qui sert aussi l'interface Angular
+fastapi==0.162.0
+uvicorn[standard]==0.54.0
 
 # Outils de développement
 robotcode-runner==2.8.0          # commande « robotcode » : lit robot.toml (profils)

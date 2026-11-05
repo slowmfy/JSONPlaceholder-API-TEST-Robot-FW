@@ -24,16 +24,16 @@ Chaque lancement de `robot --outputdir results tests` produit trois fichiers dan
 **Contenu** :
 
 - **couleur de fond** : verte si tous les tests passent, rouge si au moins un échoue ;
-- **résumé** : date, durée totale (environ 2,7 s pour nos 15 tests), nombre de tests réussis, échoués et ignorés ;
-- **statistiques par tag** : `smoke` 4/4, `erreur` 7/7, `limite-api` 3/3... Ce découpage n'existe que grâce aux tags mis sur les tests. Il répond à des questions comme « les cas d'erreur sont-ils tous couverts ? » ;
-- **statistiques par suite** : `Tests.Users` 3/3, `Tests.Posts` 6/6, `Tests.Errors` 6/6 ;
+- **résumé** : date, durée totale (environ 27 s pour nos 44 tests), nombre de tests réussis, échoués et ignorés ;
+- **statistiques par tag** : `smoke` 10/10, `erreur` 20/20, `ui` 16/16, `limite-api` 3/3... Ce découpage n'existe que grâce aux tags mis sur les tests. Il répond à des questions comme « les cas d'erreur sont-ils tous couverts ? » ;
+- **statistiques par suite** : `Tests.Users` 3/3, `Tests.Posts` 6/6, `Tests.Errors` 6/6, `Tests.Web` 29/29 (et chacune de ses sous-suites) ;
 - **liste des tests**, filtrable par suite, tag ou statut, avec leur documentation, leurs tags, leur durée et leur message d'échec. Un clic sur un test ouvre son détail dans `log.html`.
 
 **Contexte d'utilisation** :
 
 - le fichier à envoyer à un responsable, un chef de projet ou un client après une campagne ;
 - la page publiée par l'intégration continue après chaque build ;
-- le support d'une réunion de validation : « 15 tests sur 15, aucun échec, 3 limites de l'API documentées ».
+- le support d'une réunion de validation : « 44 tests sur 44, aucun échec, 3 limites de l'API documentées ».
 
 ---
 
@@ -132,6 +132,31 @@ C'est le fichier à **archiver** : à partir de lui, on peut tout recréer. Les 
 
 ---
 
+## 4. Ce que les tests web ajoutent aux rapports
+
+Les tests de l'application web (`tests/web/`) produisent des informations supplémentaires, toutes reliées au même `log.html` :
+
+| Élément | Où | Contenu |
+|---|---|---|
+| **Capture d'écran d'échec** | `results/browser/screenshot/fail-screenshot-<n>.png`, affichée dans `log.html` sous le mot-clé en échec | la page telle que le navigateur l'affichait au moment de l'échec |
+| Actions du navigateur | `log.html` | chaque `Click`, `Fill Text`, `Get Text`, avec le sélecteur utilisé, la valeur lue et la durée d'attente |
+| `web_app.log` | `results/` | sortie console de l'application (requêtes reçues par le serveur), quand les tests l'ont démarrée eux-mêmes |
+| `playwright-log.txt` | `results/` | journal technique de Playwright, pour diagnostiquer un problème de lancement du navigateur |
+
+Exemple obtenu en forçant une mauvaise recherche (`--variable USER_SEARCH_TERM:wisokyburgh`) :
+
+```
+Rechercher un utilisateur par ville                                  | FAIL |
+Text '2  Ervin Howell  Shanna@melissa.tv  Wisokyburgh  Rapport Modifier Supprimer' (str)
+should contain 'Leanne Graham' (str)
+```
+
+La capture d'écran jointe montre aussitôt la cause : la recherche a trouvé Ervin Howell, qui habite Wisokyburgh. Sans elle, il aurait fallu relancer le test et observer la fenêtre du navigateur pour comprendre, ce qui est impossible en intégration continue (navigateur masqué, `HEADLESS=true`). Pour un test d'interface, la capture d'écran est souvent l'information la plus utile du rapport.
+
+Les tags `ui`, `web-api` et `jsonplaceholder` donnent aussi, dans `report.html`, un taux de réussite par niveau de test : si seuls les tests `ui` échouent, le problème vient de l'interface et non de l'API.
+
+---
+
 ## Résumé
 
 | | `report.html` | `log.html` | `output.xml` |
@@ -139,5 +164,5 @@ C'est le fichier à **archiver** : à partir de lui, on peut tout recréer. Les 
 | Question | La campagne est-elle réussie ? | Pourquoi ce test a-t-il échoué ? | Que faire automatiquement de ces résultats ? |
 | Public | responsable, équipe, client | développeur, testeur | outils : CI, `rebot`, scripts |
 | Détail | statistiques, liste des tests | chaque mot-clé, chaque requête HTTP | tout, au format XML |
-| Taille (nos 15 tests) | ~250 Ko | ~310 Ko | ~210 Ko |
+| Taille (nos 44 tests) | ~260 Ko | ~410 Ko | ~500 Ko |
 | Moment | après la campagne | pendant l'analyse d'un échec | dans le pipeline, archivage |

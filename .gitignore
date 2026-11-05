@@ -11,3 +11,10 @@ report.html
 # Caches des outils
 .robotcode_cache/
 .ruff_cache/
+
+# Application web (app/) : journaux, dépendances et build Angular
+*.log
+*.log.*
+node_modules/
+app/frontend/dist/
+app/frontend/.angular/

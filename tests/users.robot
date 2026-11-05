@@ -9,7 +9,7 @@ Resource          ../resources/api.resource
 Suite Setup       Open API Session
 Suite Teardown    Close API Sessions
 
-Test Tags         users
+Test Tags         jsonplaceholder    users
 
 
 *** Test Cases ***
