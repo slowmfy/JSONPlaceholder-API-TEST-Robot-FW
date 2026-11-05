@@ -19,6 +19,8 @@ Le dépôt est **autonome** : l'application testée est copiée dans `app/` depu
 | API web de l'application | `tests/web/web_api.robot` | 13 | ~1 s |
 | Interface Angular | `tests/web/ui_*.robot` | 16 | ~20 s masquée, ~1 min 20 visible (ralentie) |
 
+> **Versions** : la branche `main` contient la version actuelle (tests de l'API JSONPlaceholder + application web). La première version du projet, qui teste uniquement l'API JSONPlaceholder sans l'application web, est disponible sur la branche [`V1`](https://github.com/slowmfy/JSONPlaceholder-API-TEST-Robot-FW/tree/V1).
+
 ## Sommaire
 
 1. [Installation](#1-installation)
