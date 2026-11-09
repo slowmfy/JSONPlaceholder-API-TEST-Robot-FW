@@ -1,561 +1,314 @@
-# JSONPlaceholder — Tests Robot Framework
+# Tests de l'interface web avec Robot Framework
 
-Campagne de tests automatisés écrite avec [Robot Framework](https://robotframework.org). Elle couvre deux cibles :
+Ce projet teste **l'interface web** d'une application (dossier [`app/`](app/README.md)) dans un vrai navigateur, avec [Robot Framework](https://robotframework.org) et la bibliothèque [Browser](https://robotframework-browser.org).
 
-1. **L'API REST publique [JSONPlaceholder](https://jsonplaceholder.typicode.com)**, testée avec [RequestsLibrary](https://github.com/MarketSquare/robotframework-requests).
-2. **L'application web du projet précédent**, incluse dans le dossier [`app/`](app/README.md) :
-   - son **API web FastAPI** (`web_api.py`), testée avec RequestsLibrary ;
-   - son **interface Angular**, testée dans un vrai navigateur avec la bibliothèque [Browser](https://robotframework-browser.org) (Playwright).
+L'application affiche les utilisateurs et les posts de l'API publique [JSONPlaceholder](https://jsonplaceholder.typicode.com). Les tests ouvrent le navigateur, cliquent, remplissent des formulaires et vérifient ce qui s'affiche à l'écran.
 
-Le dépôt est **autonome** : l'application testée est copiée dans `app/` depuis le projet précédent ([JSONPlaceholder-API-TEST](https://github.com/slowmfy/JSONPlaceholder-API-TEST), commit `a8f3def`). On la lance avec `.\start-app.ps1`, et les tests la démarrent eux-mêmes. Les scénarios du projet Python/PyTest précédent sont réécrits sous forme de mots-clés métier réutilisables.
+**État actuel : 16 tests, 16 réussis.**
 
-> La consigne demandait un dépôt contenant uniquement les tests. L'application est donc isolée dans `app/` : les tests Robot Framework restent dans `tests/`, `resources/` et `variables/`, et ne dépendent d'`app/` que par l'URL du serveur. Pour tester une autre copie de l'application, il suffit de définir `WEB_APP_DIR`.
-
-**État actuel : 44 tests, 44 réussis**, en 27 secondes environ fenêtre masquée, 1 min 30 environ fenêtre visible (démarrage de l'application compris).
-
-| Campagne | Dossier | Tests | Durée |
-|---|---|---|---|
-| API JSONPlaceholder | `tests/*.robot` | 15 | ~3 s |
-| API web de l'application | `tests/web/web_api.robot` | 13 | ~1 s |
-| Interface Angular | `tests/web/ui_*.robot` | 16 | ~20 s masquée, ~1 min 20 visible (ralentie) |
-
-> **Versions** : la branche `main` contient la version actuelle (tests de l'API JSONPlaceholder + application web). La première version du projet, qui teste uniquement l'API JSONPlaceholder sans l'application web, est disponible sur la branche [`V1`](https://github.com/slowmfy/JSONPlaceholder-API-TEST-Robot-FW/tree/V1).
-
-## Sommaire
-
-1. [Installation](#1-installation)
-2. [Exécution des tests](#2-exécution-des-tests)
-3. [Structure du projet](#3-structure-du-projet)
-4. [Architecture des mots-clés](#4-architecture-des-mots-clés)
-5. [Scénarios couverts](#5-scénarios-couverts)
-6. [Rapports d'exécution](#6-rapports-dexécution)
-7. [Qualité du code](#7-qualité-du-code)
-8. [Ajouter un test](#8-ajouter-un-test)
-9. [Limites connues](#9-limites-connues)
+> **Versions** : la branche [`V1`](https://github.com/slowmfy/JSONPlaceholder-API-TEST-Robot-FW/tree/V1) contient la première version, qui testait l'API JSONPlaceholder (sans navigateur).
 
 ---
 
-## 1. Installation
+## 1. Selenium ou Browser ?
 
-### Prérequis
+Robot Framework a deux bibliothèques principales pour piloter un navigateur :
 
-| Outil | Version testée | Rôle |
+| | **SeleniumLibrary** | **Browser** (utilisée ici) |
 |---|---|---|
-| Python | 3.14.8 (3.10 minimum) | Robot Framework est écrit en Python |
-| Node.js | 26.13 (LTS recommandée) | compilation de l'interface Angular, bibliothèque Browser (Playwright) |
-| Git | toute version récente | récupération du dépôt |
-| Visual Studio Code | toute version récente | éditeur, avec l'extension RobotCode |
-| Microsoft Edge | préinstallé sous Windows | navigateur des tests d'interface (voir étape 6) |
-| Accès Internet | — | les tests appellent la vraie API JSONPlaceholder |
+| Moteur | Selenium WebDriver | Playwright (Microsoft) |
+| Ouvrir le navigateur | `Open Browser    url    chrome` | `New Browser` + `New Page    url` |
+| Cliquer | `Click Element    id=btn` | `Click    id=btn` |
+| Saisir du texte | `Input Text    id=champ    texte` | `Fill Text    id=champ    texte` |
+| Lire et vérifier un texte | `Element Text Should Be    css=h1    Bonjour` | `Get Text    css=h1    ==    Bonjour` |
+| Attendre un élément | souvent à la main (`Wait Until Element Is Visible`) | **automatique** : chaque mot-clé attend que l'élément soit prêt |
+| Installation | Python seulement (+ un driver de navigateur) | Python **et** Node.js (`rfbrowser init`) |
 
-Les tests de l'API JSONPlaceholder (`tests/*.robot`) n'ont besoin que de Python. Node.js et l'application web ne servent qu'aux tests de `tests/web/`.
-
-### Étape 1 : installer Python et Node.js
-
-1. Python : <https://www.python.org/downloads/>. **Windows** : cocher **« Add python.exe to PATH »** dans l'installateur.
-2. Node.js : <https://nodejs.org/> (version LTS).
-3. Vérifier dans un nouveau terminal :
-
-   ```powershell
-   python --version     # Python 3.10 ou plus
-   node --version       # v20 ou plus
-   ```
-
-### Étape 2 : récupérer le dépôt
-
-```powershell
-git clone https://github.com/slowmfy/JSONPlaceholder-API-TEST-Robot-FW.git
-cd JSONPlaceholder-API-TEST-Robot-FW
-```
-
-### Étape 3 : créer un environnement virtuel
-
-Un environnement virtuel (`venv`) isole les bibliothèques de ce projet de celles du reste de la machine : deux projets peuvent utiliser deux versions différentes de Robot Framework sans conflit.
-
-```powershell
-python -m venv venv
-```
-
-Puis l'activer (à refaire dans chaque nouveau terminal) :
-
-| Système | Commande |
-|---|---|
-| Windows PowerShell | `.\venv\Scripts\Activate.ps1` |
-| Windows cmd | `venv\Scripts\activate.bat` |
-| Linux / macOS / Git Bash | `source venv/bin/activate` (Git Bash : `source venv/Scripts/activate`) |
-
-Le préfixe `(venv)` apparaît alors devant l'invite de commande.
-
-> **PowerShell refuse d'exécuter `Activate.ps1` ?** Autoriser les scripts locaux pour l'utilisateur courant, une seule fois :
-> `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`
-
-### Étape 4 : installer Robot Framework et les bibliothèques
-
-```powershell
-python -m pip install --upgrade pip
-pip install -r requirements.txt
-```
-
-`requirements.txt` fixe les versions exactes, ce qui garantit le même environnement pour tous les développeurs :
-
-| Paquet | Rôle |
-|---|---|
-| `robotframework` | moteur d'exécution des tests (`robot`) |
-| `robotframework-requests` | RequestsLibrary : mots-clés HTTP (`GET On Session`...), basée sur la bibliothèque Python `requests` |
-| `robotframework-browser` | Browser : pilotage d'un navigateur avec Playwright, pour les tests d'interface |
-| `robotcode-runner` | commande `robotcode` : exécution avec la configuration `robot.toml` |
-| `robotframework-robocop` | analyse statique et formatage du code Robot |
-
-### Étape 5 : lancer l'application web (le front)
-
-L'application testée (API FastAPI + interface Angular) est dans `app/`. Ses dépendances Python (FastAPI, uvicorn) sont déjà installées par `requirements.txt`, dans le même `venv`.
-
-```powershell
-.\start-app.ps1          # interface sur http://127.0.0.1:8000 (Ctrl+C pour arrêter)
-.\start-app.ps1 dev      # mode développement Angular : http://localhost:4200, rechargement automatique
-.\start-app.bat          # même chose si PowerShell refuse d'exécuter le script (ou double-clic)
-```
-
-Au premier lancement, le script installe les dépendances Angular (`npm ci`, quelques minutes) et compile l'interface. Les lancements suivants sont immédiats ; l'interface n'est recompilée que si ses sources ont changé (`-Rebuild` pour forcer).
-
-Lancer l'application à la main n'est pas nécessaire pour les tests : ils la démarrent eux-mêmes. En revanche, **l'interface doit avoir été compilée une fois** (par `start-app.ps1`, ou `npm ci` puis `npm run build` dans `app/frontend`).
-
-### Étape 6 : initialiser la bibliothèque Browser
-
-Browser s'appuie sur Playwright, un programme Node.js qu'il faut installer à part :
-
-```powershell
-# Windows : les tests utilisent Microsoft Edge, déjà installé
-rfbrowser init --skip-browsers
-
-# Linux / macOS / intégration continue : télécharger Chromium (~700 Mo)
-rfbrowser init chromium
-```
-
-> **Pourquoi Edge sous Windows ?** Playwright range son propre Chromium très profondément dans `venv\Lib\site-packages\Browser\wrapper\node_modules\playwright-core\.local-browsers\...`. Si le projet se trouve dans un dossier au nom long (par exemple dans OneDrive), le chemin du navigateur dépasse **260 caractères**, la limite historique de Windows (`MAX_PATH`). Le lancement échoue alors avec `spawn ... chrome-headless-shell.exe ENOENT`, alors que le fichier existe bien (le chemin mesurait 279 caractères ici). Edge, basé sur Chromium et toujours présent sous Windows, évite le problème. Le navigateur se change avec la variable d'environnement `BROWSER_CHANNEL` : `chrome`, `msedge`, ou vide pour le Chromium de Playwright.
-
-Vérifier l'installation :
-
-```powershell
-robot --version                                   # Robot Framework 7.5.1 (Python 3.14.8 ...)
-python -c "import RequestsLibrary, Browser; print('Bibliothèques OK')"
-```
-
-### Étape 7 : configurer Visual Studio Code et RobotCode
-
-1. Ouvrir le dossier du projet dans VS Code : `code .`
-2. Installer l'extension **RobotCode** (éditeur `d-biehl`). VS Code la propose automatiquement grâce à `.vscode/extensions.json`. Sinon, depuis un terminal :
-
-   ```powershell
-   code --install-extension d-biehl.robotcode
-   ```
-
-3. Sélectionner l'interpréteur Python du projet : `Ctrl+Maj+P` → **Python: Select Interpreter** → `.\venv\Scripts\python.exe`. Le fichier `.vscode/settings.json` le préconfigure déjà sous Windows.
-4. **Désactiver les anciennes extensions Robot Framework** (par exemple *Robot Framework Intellisense*, `vivainio.robotframework`). Elles analysent aussi les fichiers `.robot` et entrent en conflit avec RobotCode (doubles diagnostics, complétion incohérente).
-5. Recharger la fenêtre : `Ctrl+Maj+P` → **Developer: Reload Window**.
-
-RobotCode apporte alors :
-
-- coloration syntaxique, complétion des mots-clés et des variables ;
-- `Ctrl+clic` sur un mot-clé pour ouvrir sa définition dans `resources/` ;
-- documentation des mots-clés au survol ;
-- erreurs signalées dès la saisie (mot-clé inconnu, variable non définie, mot-clé privé utilisé dans un test...) ;
-- boutons ▶ devant chaque test et vue **Testing** (icône fiole) pour lancer un test, une suite ou tout le projet, et déboguer pas à pas avec des points d'arrêt.
-
-RobotCode lit `robot.toml` : les tests lancés depuis VS Code écrivent leurs rapports dans `results/`, comme en ligne de commande.
+**Ce projet n'utilise pas Selenium**, il utilise **Browser**. Les idées sont les mêmes ; seuls les noms des mots-clés changent.
 
 ---
 
-## 2. Exécution des tests
-
-Toutes les commandes se lancent à la racine du projet, environnement virtuel activé.
-
-### Commandes de base
-
-```powershell
-# Toute la campagne : JSONPlaceholder, API web et interface
-robot --outputdir results tests
-
-# Seulement l'API JSONPlaceholder (pas besoin de l'application web)
-robot --outputdir results --include jsonplaceholder tests
-
-# Seulement l'application web (API FastAPI + interface)
-robot --outputdir results tests/web
-
-# Une suite web, en gardant l'initialisation du dossier (démarrage de l'application)
-robot --outputdir results --suite ui_posts tests/web
-
-# Un seul test, par son nom
-robot --outputdir results --test "Créer un post" tests
-```
-
-**L'application web est démarrée automatiquement.** `tests/web/__init__.robot` la lance avant les suites web et l'arrête après. Si elle répond déjà sur `http://127.0.0.1:8000` (lancée avec `start-app.ps1`, par exemple), elle est réutilisée et laissée en marche. Sa sortie console est enregistrée dans `results/web_app.log`.
-
-> Lancer directement un fichier web (`robot tests/web/ui_posts.robot`) ignore `__init__.robot` : l'application n'est alors pas démarrée et les traductions ne sont pas chargées. Il faut passer par le dossier et `--suite`, comme ci-dessus. RobotCode le fait automatiquement depuis VS Code.
-
-### Voir le navigateur pendant les tests
-
-Ce sont les tests qui ouvrent la fenêtre du navigateur : par défaut, elle est **visible**, et on voit chaque test naviguer, remplir les formulaires et cliquer. Chaque suite d'interface ouvre sa fenêtre au début et la ferme à la fin.
-
-Pour qu'on puisse suivre les changements à l'œil, la fenêtre visible est **ralentie** : 0,5 s entre chaque action (`SLOW_MO`) et 2 s à la fin de chaque test (`PAUSE_AFTER_TEST`), le temps de voir le résultat. Les 16 tests d'interface prennent alors environ 1 min 20 au lieu de 20 s. Pour régler la vitesse :
-
-```powershell
-robot --outputdir results --variable SLOW_MO:1s --variable PAUSE_AFTER_TEST:3s tests/web   # plus lent
-robot --outputdir results --variable SLOW_MO:0s --variable PAUSE_AFTER_TEST:0s tests/web   # pleine vitesse
-```
-
-Pour la masquer (intégration continue, serveur sans écran), utiliser le mode *headless* ; les ralentissements sont alors ignorés :
-
-```powershell
-robot --outputdir results --variable HEADLESS:True tests/web
-$env:HEADLESS = "true"        # ou par variable d'environnement
-```
-
-Les tests démarrent l'application eux-mêmes. Pour continuer à naviguer dans l'application après les tests, lance-la d'abord avec `.\start-app.ps1` : les tests la réutilisent et la laissent en marche.
-
-> Les modifications faites par un test (post créé, modifié, supprimé) ne sont visibles que dans la fenêtre de ce test. JSONPlaceholder ne conserve aucune écriture, et l'interface garde le résultat localement, le temps de la page : un autre onglet ou un autre navigateur ne les verra pas.
-
-### Sélection par tags
-
-Chaque test porte des tags qui permettent de composer une campagne à la demande :
-
-| Tag | Signification |
-|---|---|
-| `jsonplaceholder` | API publique JSONPlaceholder |
-| `web` | application web de `app/` (`web-api` : son API, `ui` : son interface) |
-| `users`, `posts` | ressource testée |
-| `nominal` | comportement attendu, sans erreur |
-| `smoke` | tests rapides de bon fonctionnement, à lancer en premier |
-| `erreur` | cas d'erreur |
-| `identifiant-invalide`, `ressource-inexistante`, `validation`, `timeout` | type d'erreur |
-| `cas-limite` | situation particulière mais valide |
-| `limite-api` | documente un comportement surprenant de JSONPlaceholder |
-| `securite`, `explorateur`, `multilingue` | thème transverse |
-
-```powershell
-robot --outputdir results --include smoke tests          # tests de bon fonctionnement
-robot --outputdir results --include erreur tests         # tous les cas d'erreur, API et interface
-robot --outputdir results --include postsANDui tests     # les posts dans l'interface
-robot --outputdir results --exclude ui tests             # tout sauf le navigateur
-```
-
-### Avec la configuration `robot.toml` (RobotCode)
-
-`robotcode robot` applique automatiquement les options de `robot.toml` (dossier `tests`, sortie dans `results/`, nom de la campagne). Des **profils** regroupent des sélections prêtes à l'emploi :
-
-```powershell
-robotcode robot                       # toute la campagne
-robotcode -p jsonplaceholder robot    # API JSONPlaceholder uniquement
-robotcode -p web robot                # application web
-robotcode -p ui robot                 # interface uniquement
-robotcode -p ui -p invisible robot    # interface, navigateur masqué
-robotcode -p smoke robot              # tag smoke
-robotcode -p erreurs robot            # tag erreur
-robotcode profiles list               # liste des profils
-```
-
-### Changer d'environnement
-
-Les URL et réglages viennent de `variables/environment.py` (JSONPlaceholder) et `variables/web.py` (application web). On peut les changer sans modifier le code :
-
-| Besoin | Variable d'environnement | ou option `robot` |
-|---|---|---|
-| Autre URL de JSONPlaceholder | `API_BASE_URL` | `--variable BASE_URL:http://localhost:3000` |
-| Application web déjà déployée ailleurs | `WEB_APP_URL` | `--variable WEB_URL:http://recette:8000` |
-| Tester une autre copie de l'application (son dépôt d'origine, par exemple) | `WEB_APP_DIR` | — (variable d'environnement uniquement : le Python de son `venv` est alors utilisé) |
-| Autre navigateur | `BROWSER_CHANNEL` (`chrome`, `msedge`, vide) | `--variable BROWSER_CHANNEL:chrome` |
-| Navigateur masqué (visible par défaut) | `HEADLESS=true` | `--variable HEADLESS:True` |
-| Vitesse de la fenêtre visible | `SLOW_MO` (500ms), `PAUSE_AFTER_TEST` (2s) | `--variable SLOW_MO:1s --variable PAUSE_AFTER_TEST:3s` |
-
-```powershell
-$env:WEB_APP_URL = "http://recette:8000"    # PowerShell
-robot --outputdir results tests/web
-```
-
-### Code de retour
-
-`robot` renvoie le **nombre de tests en échec** (0 si tout passe, plafonné à 250). Un outil d'intégration continue (GitHub Actions, GitLab CI, Jenkins) s'en sert directement pour marquer le build en échec.
-
-### Accents mal affichés dans la console Windows ?
-
-Certains terminaux (Git Bash, anciennes consoles) affichent `R�cup�rer` au lieu de `Récupérer`. Seule la console est concernée : les rapports HTML sont corrects. Pour corriger l'affichage, forcer Python en UTF-8 :
-
-```powershell
-$env:PYTHONUTF8 = 1          # PowerShell
-export PYTHONUTF8=1          # Git Bash
-```
-
----
-
-## 3. Structure du projet
+## 2. Structure du projet
 
 ```
 JSONPlaceholder-API-TEST-Robot-FW/
-├── tests/                       Suites de tests : un fichier = une suite, un dossier = une suite parente
-│   ├── users.robot              JSONPlaceholder : ressource /users
-│   ├── posts.robot              JSONPlaceholder : lecture, création, modification, suppression de posts
-│   ├── errors.robot             JSONPlaceholder : identifiant invalide, 404, timeout
-│   └── web/                     Application web de app/
-│       ├── __init__.robot       Démarre l'application avant le dossier, l'arrête après
-│       ├── web_api.robot        API web FastAPI : validation, erreurs, rapport, explorateur
-│       ├── ui_users.robot       Interface : utilisateurs, recherche, rapport, langue
-│       ├── ui_posts.robot       Interface : lister, créer, modifier, supprimer des posts
-│       └── ui_errors.robot      Interface : messages d'erreur affichés à l'utilisateur
-├── resources/
-│   ├── http.resource            Couche HTTP technique partagée (sessions, envoi des requêtes)
-│   ├── api.resource             Mots-clés de l'API JSONPlaceholder
-│   ├── web_api.resource         Mots-clés de l'API web de l'application
-│   ├── web_app.resource         Démarrage/arrêt de l'application, traductions
-│   └── web_ui.resource          Pilotage de l'interface : sélecteurs, actions, vérifications
-├── variables/
-│   ├── environment.py           JSONPlaceholder : URL, timeout, données de référence
-│   └── web.py                   Application web : URL, emplacement, navigateur, données
-├── docs/
-│   ├── rapports.md              Rôle et lecture de log.html, report.html, output.xml
-│   └── synthese.md              Bilan : apprentissages, difficultés, comparaison PyTest / Robot
-├── app/                         Application web testée : API FastAPI + interface Angular (voir app/README.md)
-├── .vscode/                     Extensions recommandées et interpréteur Python
-├── start-app.ps1, start-app.bat Lancement de l'application (le front) sur http://127.0.0.1:8000
-├── robot.toml                   Configuration RobotCode (chemins, sortie, profils)
-├── robocop.toml                 Configuration du linter Robocop
-├── requirements.txt             Dépendances aux versions figées
-└── README.md
+│
+├── tests/                          ① LES TESTS : ce que l'on vérifie
+│   ├── __init__.robot              démarre l'application avant tous les tests, l'arrête après
+│   ├── users.robot                 7 tests : liste, recherche, fiche, rapport, langue
+│   ├── posts.robot                 5 tests : lister, créer, modifier, supprimer un post
+│   └── errors.robot                4 tests : messages d'erreur affichés à l'utilisateur
+│
+├── resources/                      ② LES MOTS-CLÉS : comment on le fait
+│   ├── application.resource        démarrer / arrêter l'application, lire ses textes traduits
+│   ├── common.resource             ouvrir / fermer le navigateur + ce qui existe sur toutes les pages
+│   └── pages/                      un fichier par page de l'application
+│       ├── users_page.resource         page « Utilisateurs »         (/users)
+│       ├── user_detail_page.resource   fiche et rapport d'un utilisateur (/users/1)
+│       ├── posts_page.resource         page « Posts »               (/posts)
+│       └── post_detail_page.resource   détail d'un post              (/posts/1)
+│
+├── variables/                      ③ LES VALEURS : avec quoi on le fait
+│   ├── config.py                   adresse de l'application, navigateur, délais
+│   └── test_data.py                données de test : identifiants, noms, nombres attendus
+│
+├── app/                            l'application testée (API FastAPI + interface Angular)
+├── docs/                           explications : rapports, bilan du projet
+├── results/                        créé à chaque exécution : report.html, log.html (non versionné)
+├── start-app.ps1 / .bat            lancer l'application à la main
+├── requirements.txt                bibliothèques Python à installer
+├── robot.toml                      configuration pour VS Code (RobotCode)
+└── robocop.toml                    configuration du vérificateur de code Robocop
 ```
 
-Par rapport à l'arborescence demandée :
+### La règle à retenir : 3 niveaux
 
-- **`errors.robot`** regroupe les cas d'erreur de JSONPlaceholder. Ils sont transverses (`/users`, `/posts`, routes inconnues) : les regrouper permet de les lancer ensemble et garde `users.robot` et `posts.robot` centrés sur chaque ressource. Les tags `users` et `posts` permettent tout de même de sélectionner toute une ressource, cas d'erreur compris.
-- **`tests/web/`** et ses ressources testent le reste du projet actuel, son API web et son interface. Ces tests sont isolés dans un dossier pour que la campagne JSONPlaceholder reste exécutable sans l'application (`--include jsonplaceholder`).
-- **`app/`** contient l'application testée, pour que le dépôt soit autonome. Elle est séparée des tests : aucun fichier de `tests/`, `resources/` ou `variables/` n'importe son code, les tests ne communiquent avec elle que par HTTP et par le navigateur.
+| Dossier | Répond à la question | Contient | Exemple |
+|---|---|---|---|
+| `tests/` | **Quoi** vérifier ? | des phrases lisibles, pas de technique | `Go To Users Page` |
+| `resources/` | **Comment** le faire ? | les sélecteurs HTML et les mots-clés Browser | `Click    css=main table tbody tr` |
+| `variables/` | **Avec quelles valeurs** ? | des données, sans logique | `EXISTING_USER_NAME = "Leanne Graham"` |
 
-### Les notions de Robot Framework utilisées
+Un test ne contient **jamais** de sélecteur HTML (`css=...`) ni de valeur en dur : s'il faut changer un bouton ou une donnée, on le change à **un seul** endroit.
 
-| Notion | Où | Rôle |
-|---|---|---|
-| **Suite de tests** | `tests/*.robot`, `tests/web/*.robot` | Un fichier `.robot` est une suite ; un dossier de suites est une suite parente. Chaque suite a son `Suite Setup` et son `Suite Teardown`. |
-| **Fichier d'initialisation** | `tests/web/__init__.robot` | Setup et teardown d'un *dossier* entier : l'application web n'est démarrée qu'une fois pour les 4 suites web. |
-| **Resource file** | `resources/*.resource` | Bibliothèque de mots-clés écrite en Robot Framework, importée par `Resource`. Ne contient pas de tests. |
-| **Variables** | `variables/*.py` | Fichiers de variables Python : chaque nom en majuscules devient une variable `${NOM}`, avec son type. |
-| **Keywords** | `resources/*.resource` | Actions réutilisables, documentées, avec arguments et valeurs par défaut. Les tests ne sont qu'un enchaînement de mots-clés. |
-| **Setup / teardown de test** | suites `ui_*.robot` | `Test Setup` ouvre un contexte de navigateur neuf pour chaque test, `Test Teardown` le ferme. |
-| **Templates** | `errors.robot`, `web_api.robot`, `ui_errors.robot` | Tests pilotés par les données : un mot-clé, plusieurs jeux de valeurs. |
+### Pourquoi un fichier par page ? (le modèle *Page Object*)
 
----
-
-## 4. Architecture des mots-clés
-
-L'objectif est qu'**aucune requête HTTP, URL ni sélecteur HTML n'apparaisse dans les tests**.
-
-```
- Tests            tests/*.robot                 tests/web/web_api.robot       tests/web/ui_*.robot
-                       │                                  │                            │
- ──────────────────────┼──────────────────────────────────┼────────────────────────────┼────────────
- Métier          api.resource                     web_api.resource             web_ui.resource
-                 Get User, Create Post...         Get Web User,                Go To Users Page,
-                 User Should Be Valid...          Create Web Post...           Create Post From Form,
-                       │                          Error Should Be...           Success Message Should Be...
-                       │ Call API (privé)                 │ Call Web API (privé)       │
- Technique             └──────────────┬───────────────────┘                            │ sélecteurs
-                                http.resource                                          │ (*** Variables ***)
-                       Open HTTP Session, Send Request On Session                      │
-                                      │                     web_app.resource ◄─────────┤ textes traduits
-                                      ▼                     (démarrage, Text)          ▼
- Bibliothèques                 RequestsLibrary                                  Browser (Playwright)
-                                      │                                                │
- Cibles                 JSONPlaceholder   API web FastAPI  ◄───────────────  Interface Angular
-```
-
-### Choix de conception
-
-- **Une seule couche HTTP pour deux API** : `http.resource` ouvre les sessions et envoie les requêtes. `api.resource` et `web_api.resource` n'ont chacun qu'un mot-clé privé (`Call API`, `Call Web API`) qui lui délègue en fixant la session. Ajouter un en-tête, un jeton ou une journalisation se fait à un seul endroit, pour les deux API.
-- **Mots-clés privés** : `Call API`, `Call Web API` et `Build Post Payload` portent le tag `robot:private`. Si un test les appelle directement, Robot Framework affiche un avertissement et RobotCode le signale dans l'éditeur. La règle « pas de requête brute dans les tests » est donc vérifiée par l'outil.
-- **Un mot-clé pour le cas nominal et les cas d'erreur** : chaque action a un argument `expected_status` avec une valeur par défaut (200, ou 201 pour la création). Le même `Get User` sert pour l'utilisateur existant (`Get User    1`) et inexistant (`Get User    999    expected_status=404`).
-- **Page objects pour l'interface** : `web_ui.resource` est le seul fichier qui connaît le HTML. Ses sélecteurs sont regroupés dans sa section `*** Variables ***` : si une page change, c'est là qu'on les met à jour. Seule exception : les champs de formulaire, trouvés par leur nom (`title`, `body`) car Angular génère leur `id`. Les tests décrivent ce que fait l'utilisateur (`Create Post From Form`, `Ask To Delete Displayed Post`, `Confirm Deletion`).
-- **Aucun texte de l'interface recopié** : les messages attendus (« Post 101 créé. », « Utilisateur 999 introuvable. ») viennent des traductions de l'application, chargées depuis `/api/translations/fr`. Le mot-clé `Text    created_post    id=101` produit le texte exact. Si un libellé change dans `locales/fr.json`, les tests suivent sans modification.
-- **Aucune pause fixe** : les mots-clés de vérification de Browser (`Get Text    css=h1    ==    Leanne Graham`) attendent que la condition soit vraie, jusqu'à 10 secondes. Pas de `Sleep`, donc des tests à la fois rapides et stables.
-- **Tests isolés** : chaque test d'interface s'exécute dans un *contexte* de navigateur neuf (pas de cookies ni de `localStorage`). La langue choisie dans un test n'affecte donc pas le suivant.
-- **Application démarrée à la demande** : `__init__.robot` démarre l'application si elle ne répond pas, et ne l'arrête que s'il l'a lancée lui-même.
-- **Messages d'échec lisibles** : `Number Of Items Should Be` remplace `Length Should Be`, qui afficherait la liste entière des utilisateurs en cas d'échec. Les comparaisons portent un message explicite (`Nom inattendu: Ervin Howell != Leanne Graham`).
-- **Session HTTP sécurisée** : la vérification du certificat HTTPS est activée explicitement (`verify=${True}`), car RequestsLibrary la **désactive par défaut**.
-- **Typage des arguments** (Robot Framework 7.3 et plus) : `Build Post Payload` déclare `${user_id: int}`, pour envoyer `userId` comme nombre JSON (`1`) et non comme texte (`"1"`).
-- **Données centralisées** : identifiants, nombres attendus et textes viennent de `variables/`. Les tests d'interface réutilisent les données de `environment.py`.
-
-### Exemple : le même scénario à trois niveaux
+Chaque fichier de `resources/pages/` décrit **une page** de l'application, toujours avec le même plan :
 
 ```robotframework
-# tests/posts.robot : API JSONPlaceholder
-Créer un post
-    ${post}=    Create Post    ${EXISTING_USER_ID}    ${NEW_POST_TITLE}    ${NEW_POST_BODY}
-    Post Should Contain    ${post}    ${EXISTING_USER_ID}    ${NEW_POST_TITLE}    ${NEW_POST_BODY}
+*** Variables ***
+# 1. Les sélecteurs : comment trouver les éléments de CETTE page
+${USER_SEARCH}    css=main input[type=search]
 
-# tests/web/web_api.robot : API web de l'application
-Créer un post
-    ${result}=    Create Web Post    1    Titre    Contenu
-    Should Be Equal As Integers    ${result}[item][id]    101
-    Write Should Be Simulated    ${result}
+*** Keywords ***
+# 2. Aller sur la page
+Go To Users Page
+# 3. Les actions possibles sur la page
+Search Users
+# 4. Les vérifications possibles sur la page
+Users Table Should Have Rows
+```
 
-# tests/web/ui_posts.robot : interface, dans le navigateur
-Créer un post
+Si la page « Utilisateurs » change, on ne modifie que `users_page.resource`. Les tests, eux, ne bougent pas.
+
+Ce qui est présent sur **toutes** les pages (le menu, le titre `h1`, les messages vert/rouge, le formulaire) est dans `common.resource`, pour ne pas le répéter.
+
+### Qui importe quoi ?
+
+```
+tests/users.robot
+   │  Resource   pages/users_page.resource ─┐
+   │  Resource   pages/user_detail_page.resource ─┤
+   │  Variables  variables/test_data.py        │
+   │                                            ▼
+   │                                  common.resource ── Library Browser   (Playwright)
+   │                                     │      └────── Variables config.py
+   │                                     ▼
+   │                              application.resource  (mot-clé Text)
+   │
+tests/__init__.robot ──► application.resource  (démarrage de l'application)
+```
+
+Un test qui importe une page reçoit donc automatiquement tous les mots-clés de `common.resource` et de `application.resource`.
+
+---
+
+## 3. Suivre un exemple de bout en bout
+
+Prenons le test **« Rechercher un utilisateur par ville »** et descendons niveau par niveau.
+
+**① Le test** — [`tests/users.robot`](tests/users.robot) : il se lit comme une phrase.
+
+```robotframework
+Rechercher un utilisateur par ville
+    [Documentation]    La recherche porte aussi sur la ville et ne tient pas compte des majuscules.
+    [Tags]    nominal
+    Go To Users Page
+    Search Users    ${EXISTING_USER_CITY}
+    Users Table Should Only Contain    ${EXISTING_USER_NAME}
+```
+
+**② Les valeurs** — [`variables/test_data.py`](variables/test_data.py) : chaque nom en MAJUSCULES devient une variable `${...}`.
+
+```python
+EXISTING_USER_NAME = "Leanne Graham"
+EXISTING_USER_CITY = "gwenborough"
+```
+
+**③ Les mots-clés de la page** — [`resources/pages/users_page.resource`](resources/pages/users_page.resource) : ici seulement, on sait où cliquer.
+
+```robotframework
+*** Variables ***
+${USER_ROWS}      css=main table tbody tr
+${USER_SEARCH}    css=main input[type=search]
+
+*** Keywords ***
+Search Users
+    [Arguments]    ${term}
+    Fill Text    ${USER_SEARCH}    ${term}              # mot-clé de la bibliothèque Browser
+
+Users Table Should Only Contain
+    [Arguments]    ${name}
+    Users Table Should Have Rows    1
+    Get Text    ${USER_ROWS}    *=    ${name}           # *= veut dire « contient »
+```
+
+**④ La bibliothèque Browser** exécute `Fill Text` et `Get Text` dans le navigateur. `Get Text ... *= ...` **attend** (jusqu'à 10 s) que le texte apparaisse : pas besoin de `Sleep`.
+
+### Le déroulement complet d'un fichier de tests
+
+```
+tests/__init__.robot     Suite Setup     → Prepare Web Application   (démarre l'application)
+│
+├── users.robot          Suite Setup     → Open Test Browser         (ouvre le navigateur)
+│   ├── test 1           Test Setup      → Open Application          (onglet neuf, sans cookies)
+│   │                    ... étapes du test ...
+│   │                    Test Teardown   → Close Application         (ferme l'onglet)
+│   ├── test 2           (pareil)
+│   └──                  Suite Teardown  → Close Test Browser        (ferme le navigateur)
+├── posts.robot          (pareil)
+├── errors.robot         (pareil)
+│
+└──                      Suite Teardown  → Stop Web Application      (arrête l'application)
+```
+
+Chaque test démarre dans un onglet **neuf** : aucun test ne dépend du précédent.
+
+### Les textes ne sont jamais recopiés
+
+Les messages attendus (« Post 101 créé. ») ne sont pas écrits dans les tests. Le mot-clé `Text` (dans `application.resource`) les lit dans les traductions de l'application (`app/locales/fr.json`) :
+
+```robotframework
+${message}=    Text    created_post    id=101        # → « Post 101 créé. »
+Success Message Should Be    ${message}
+```
+
+Si l'application change ce libellé, les tests suivent sans modification.
+
+---
+
+## 4. Installation (une seule fois)
+
+Prérequis : **Python 3.10+**, **Node.js** (LTS), **Git**, **VS Code**, **Microsoft Edge** (déjà présent sous Windows).
+
+```powershell
+# 1. Récupérer le projet
+git clone https://github.com/slowmfy/JSONPlaceholder-API-TEST-Robot-FW.git
+cd JSONPlaceholder-API-TEST-Robot-FW
+
+# 2. Créer et activer l'environnement virtuel Python
+python -m venv venv
+.\venv\Scripts\Activate.ps1          # si refusé : Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+
+# 3. Installer Robot Framework et les bibliothèques
+pip install -r requirements.txt
+
+# 4. Installer Playwright pour la bibliothèque Browser (utilise Edge sous Windows)
+rfbrowser init --skip-browsers
+
+# 5. Compiler l'interface de l'application (indispensable, sinon page blanche)
+.\start-app.ps1                      # compile puis lance l'application ; Ctrl+C pour l'arrêter
+```
+
+| Paquet (`requirements.txt`) | Rôle |
+|---|---|
+| `robotframework` | le moteur : commande `robot` |
+| `robotframework-browser` | bibliothèque **Browser** : piloter le navigateur |
+| `robotframework-requests` | requêtes HTTP : vérifier que l'application répond, lire ses traductions |
+| `fastapi`, `uvicorn` | font tourner l'application testée |
+| `robotcode-runner`, `robotframework-robocop` | outils : exécution depuis VS Code, vérification du code |
+
+**VS Code** : installer l'extension **RobotCode** (proposée automatiquement). Elle ajoute la complétion, `Ctrl+clic` sur un mot-clé pour ouvrir sa définition, et un bouton ▶ devant chaque test.
+
+> **Pourquoi Edge ?** Le Chromium téléchargé par Playwright est rangé très profondément dans `venv\`. Dans un dossier au nom long (OneDrive), son chemin dépasse 260 caractères, la limite de Windows, et le navigateur ne démarre pas. Edge évite le problème. Pour Chrome : `$env:BROWSER_CHANNEL = "chrome"`.
+
+---
+
+## 5. Lancer les tests
+
+À la racine du projet, environnement virtuel activé. **Pas besoin de lancer l'application** : `tests/__init__.robot` la démarre et l'arrête (si elle tourne déjà, elle est réutilisée).
+
+```powershell
+robot --outputdir results tests                                  # tous les tests (navigateur visible et ralenti)
+robot --outputdir results --variable HEADLESS:True tests         # navigateur masqué : ~20 s
+robot --outputdir results --suite users tests                    # un seul fichier (users.robot)
+robot --outputdir results --test "Créer un post" tests           # un seul test
+robot --outputdir results --include smoke tests                  # par tag
+```
+
+> Pour lancer un seul fichier, utiliser `--suite` sur le **dossier** `tests` (et non `robot tests/users.robot`), sinon `__init__.robot` est ignoré et l'application n'est pas démarrée.
+
+Ensuite, ouvrir le rapport : `start results\report.html` (détail pas à pas, avec capture d'écran en cas d'échec, dans `results\log.html`). Voir [docs/rapports.md](docs/rapports.md).
+
+### Tags disponibles
+
+| Tag | Signification |
+|---|---|
+| `users`, `posts` | page testée |
+| `nominal` | cas normal, sans erreur |
+| `smoke` | tests rapides à lancer en premier |
+| `erreur` | message d'erreur attendu |
+| `cas-limite` | situation particulière mais valide |
+| `identifiant-invalide`, `ressource-inexistante`, `validation`, `multilingue` | précision sur le cas testé |
+
+### Régler le navigateur
+
+| Besoin | Option |
+|---|---|
+| Masquer le navigateur | `--variable HEADLESS:True` |
+| Ralentir / accélérer la fenêtre visible | `--variable SLOW_MO:1s --variable PAUSE_AFTER_TEST:3s` (ou `0s`) |
+| Utiliser Chrome | `--variable BROWSER_CHANNEL:chrome` |
+| Tester une application déjà lancée ailleurs | `$env:WEB_APP_URL = "http://serveur:8000"` |
+
+Avec RobotCode : `robotcode robot`, `robotcode -p smoke robot`, `robotcode -p smoke -p invisible robot` (profils dans `robot.toml`).
+
+---
+
+## 6. Ajouter un test : exemple pas à pas
+
+Objectif : vérifier que la page « Posts » affiche 100 posts.
+
+**1. La donnée** dans [`variables/test_data.py`](variables/test_data.py) :
+
+```python
+POSTS_COUNT = 100
+```
+
+**2. Le mot-clé** dans la page concernée, [`resources/pages/posts_page.resource`](resources/pages/posts_page.resource), section vérifications. `${LIST_ROWS}` existe déjà dans `common.resource` :
+
+```robotframework
+Posts List Should Have
+    [Documentation]    Vérifie le nombre de posts affichés.
+    [Arguments]    ${count}
+    Get Element Count    ${LIST_ROWS}    ==    ${count}
+```
+
+**3. Le test** dans [`tests/posts.robot`](tests/posts.robot) :
+
+```robotframework
+Afficher tous les posts
+    [Documentation]    La page des posts affiche les 100 posts de JSONPlaceholder.
+    [Tags]    nominal
     Go To Posts Page
-    Create Post From Form    ${EXISTING_USER_ID}    ${NEW_POST_TITLE}    ${NEW_POST_BODY}
-    ${message}=    Text    created_post    id=${CREATED_POST_ID}
-    Success Message Should Be    ${message}
-    Simulated Write Notice Should Be Shown
-    Post Should Be Listed    ${NEW_POST_TITLE}
+    Posts List Should Have    ${POSTS_COUNT}
 ```
 
-La documentation de tous les mots-clés peut être générée en HTML :
+**4. Vérifier** : `robocop check`, puis `robot --outputdir results --test "Afficher tous les posts" tests`.
 
-```powershell
-libdoc resources/api.resource results/api-keywords.html
-libdoc resources/web_ui.resource results/web-ui-keywords.html
-```
-
----
-
-## 5. Scénarios couverts
-
-### API JSONPlaceholder (`tests/*.robot`, tag `jsonplaceholder`)
-
-| Suite | Test | Requête | Attendu |
-|---|---|---|---|
-| users | Récupérer tous les utilisateurs | `GET /users` | 200, 10 utilisateurs complets |
-| users | Récupérer un utilisateur existant | `GET /users/1` | 200, Leanne Graham |
-| users | Rechercher un utilisateur inexistant | `GET /users/999` | 404, `{}` |
-| posts | Lister les posts d'un utilisateur | `GET /posts?userId=1` | 200, 10 posts, tous de l'utilisateur 1 |
-| posts | Lister les posts d'un utilisateur inexistant | `GET /posts?userId=999` | 200, `[]` |
-| posts | Créer un post | `POST /posts` | 201, post renvoyé avec l'id 101 |
-| posts | Modifier un post | `PUT /posts/1` | 200, nouvelles valeurs |
-| posts | Supprimer un post | `DELETE /posts/1` | 200, `{}` |
-| posts | Un post créé n'est pas conservé par l'API | `POST /posts` puis `GET /posts/101` | 404 : écriture simulée |
-| errors | Identifiant invalide | `GET /users/abc`, `/0`, `/-1`, `/1.5` | 404 pour chacun |
-| errors | Ressource inexistante : post introuvable | `GET /posts/9999` | 404, `{}` |
-| errors | Ressource inexistante : route inconnue | `GET /unknown-resource` | 404 |
-| errors | Ressource inexistante : modification d'un post introuvable | `PUT /posts/9999` | 500 (limite de l'API) |
-| errors | Ressource inexistante : suppression d'un post introuvable | `DELETE /posts/9999` | 200 (limite de l'API) |
-| errors | Timeout simulé | `GET /users`, délai de 1 ms | exception `Timeout` levée |
-
-**Identifiant invalide** est un test **piloté par les données** : `[Template]` exécute `User Id Should Be Rejected` pour chaque valeur de `@{INVALID_IDS}`. Une valeur en échec n'arrête pas les suivantes.
-
-**Timeout simulé** : JSONPlaceholder ne propose pas de route lente. Le test ouvre une session dédiée avec un délai de 1 ms, impossible à tenir, et sans nouvelle tentative (`max_retries=0`). Le timeout est réel : c'est `requests` qui abandonne la requête (`ReadTimeout`).
-
-### API web de l'application (`tests/web/web_api.robot`, tag `web-api`)
-
-| Test | Requête | Attendu |
-|---|---|---|
-| Lister les langues de l'interface | `GET /api/languages` | `fr`, `en` |
-| Rapport d'un utilisateur | `GET /api/users/1/report` | 10 posts, 50 commentaires, post le plus commenté |
-| Créer un post | `POST /api/posts` | 201, id 101, `simulated: true` |
-| Identifiant invalide refusé avant l'appel à JSONPlaceholder | `GET /api/users/abc`, `/0`, `/-1` | 422, `error_not_integer` ou `error_not_positive`, champ `id` |
-| Utilisateur inexistant | `GET /api/users/999` | 404, `user_not_found` |
-| Créer un post sans titre | `POST /api/posts` | 422, `error_required`, champ `title` |
-| Créer un post pour un auteur inexistant | `POST /api/posts`, `user_id: 11` | 404, `user_not_found`, champ `user_id` |
-| Créer un utilisateur avec un email invalide | `POST /api/users` | 422, `error_invalid_email`, champ `email` |
-| Modifier un post inexistant | `PATCH /api/posts/9999` | 404 (JSONPlaceholder seul : 500) |
-| Supprimer un post inexistant | `DELETE /api/posts/9999` | 404 (JSONPlaceholder seul : 200) |
-| Route inconnue | `GET /api/unknown-resource` | 404, erreur JSON et non la page Angular |
-| Explorateur : relayer une requête | `POST /api/explorer` `GET /users/1` | réponse de JSONPlaceholder |
-| Explorateur : refuser une adresse externe | `POST /api/explorer` `https://example.com/` | 422 `error_invalid_path` (protection SSRF) |
-
-Ces tests montrent que l'application **corrige les limites de JSONPlaceholder** relevées dans `errors.robot` : elle valide les saisies et vérifie l'existence des ressources avant de les modifier ou de les supprimer.
-
-### Interface Angular (`tests/web/ui_*.robot`, tag `ui`)
-
-| Suite | Test | Parcours | Attendu à l'écran |
-|---|---|---|---|
-| ui_users | Afficher la liste des utilisateurs | page d'accueil | tableau de 10 lignes |
-| ui_users | Rechercher un utilisateur par ville | recherche « gwenborough » | une seule ligne : Leanne Graham |
-| ui_users | Rechercher un utilisateur sans résultat | recherche sans correspondance | « Aucun résultat. » |
-| ui_users | Ouvrir la fiche d'un utilisateur depuis la liste | clic sur le nom | nom, `@Bret`, 10 posts dans l'onglet |
-| ui_users | Ouvrir un utilisateur par son identifiant | « Accès direct » : 2 | fiche d'Ervin Howell |
-| ui_users | Afficher le rapport d'un utilisateur | `/users/1/report` | 10 posts, 50 commentaires |
-| ui_users | Changer la langue de l'interface | sélecteur : English | menu et titre en anglais |
-| ui_posts | Lister les posts d'un utilisateur | fiche de l'utilisateur 1 | 10 posts |
-| ui_posts | Créer un post | Ajouter → formulaire → Créer | « Post 101 créé. », mention « opération simulée », post ajouté à la liste |
-| ui_posts | Modifier un post | Modifier → nouveau titre → Enregistrer | « Post 1 modifié. », nouveau titre |
-| ui_posts | Supprimer un post après confirmation | Supprimer → confirmer | question de confirmation, puis « Post 1 supprimé. » |
-| ui_posts | Annuler une suppression | Supprimer → Annuler | post toujours affiché, aucun message |
-| ui_errors | Identifiant invalide | « Accès direct » : `abc`, `0`, `-1` | message d'erreur explicite pour chacun |
-| ui_errors | Utilisateur inexistant | `/users/999` | « Utilisateur 999 introuvable. » |
-| ui_errors | Post inexistant | `/posts/9999` | « Post 9999 introuvable. » |
-| ui_errors | Créer un post sans titre | formulaire, titre vide | « Ce champ est obligatoire. » sous le champ, marqué `aria-invalid` |
-
-Plusieurs tests d'interface automatisent, côté web, des cas de tests manuels du projet précédent (`docs/cas_de_tests.md` : TC001, TC002, TC003, TC004, TC007, TC009, TC015, TC016, TC019, TC021).
-
----
-
-## 6. Rapports d'exécution
-
-Chaque exécution produit trois fichiers dans `results/` :
-
-| Fichier | Pour qui | Contenu |
-|---|---|---|
-| `report.html` | responsable, équipe, client | vue d'ensemble : statut global, statistiques par suite et par tag, liste filtrable des tests |
-| `log.html` | développeur, testeur | détail pas à pas : chaque mot-clé, ses arguments, les requêtes et réponses HTTP, les actions dans le navigateur, une **capture d'écran** en cas d'échec d'un test d'interface |
-| `output.xml` | outils | données brutes de l'exécution, au format XML : fusion de campagnes (`rebot`), intégration continue, relance des seuls tests en échec |
-
-S'y ajoutent, pour les tests web : `web_app.log` (sortie de l'application quand les tests l'ont démarrée), `browser/screenshot/` (captures d'écran des échecs) et `playwright-log.txt` (journal technique de Playwright).
-
-L'explication détaillée (contenu, lecture, cas d'usage) est dans [docs/rapports.md](docs/rapports.md).
-
-```powershell
-start results\report.html      # ouvrir le rapport (Windows)
-```
+> Pour trouver un sélecteur : dans le navigateur, clic droit sur l'élément → **Inspecter**. Préférer un `id`, un `name` ou un rôle stable plutôt qu'une longue chaîne de classes CSS.
 
 ---
 
 ## 7. Qualité du code
 
-[Robocop](https://robocop.dev) analyse et formate le code Robot Framework (configuration dans `robocop.toml`) :
-
 ```powershell
-robocop check          # analyse : règles de nommage, longueur, syntaxe dépréciée...
-robocop format         # reformatage selon le style officiel
+robocop check      # vérifie le code (nommage, longueur, syntaxe) : « No issues found »
+robocop format     # remet en forme selon le style officiel
 ```
 
-État actuel : `No issues found`. Deux règles sont désactivées, avec leur justification en commentaire : MISC04 (faux positif sur la syntaxe `VAR`) et, sur trois lignes de `web_app.resource`, VAR05 (variables de suite voulues, partagées par `__init__.robot`).
+## 8. Limites connues
 
----
-
-## 8. Ajouter un test
-
-1. Si l'appel API n'existe pas encore, ajouter une **action métier** dans `api.resource` ou `web_api.resource`, en passant par `Call API` / `Call Web API`, avec un argument `expected_status` et une `[Documentation]`.
-2. Pour l'interface : ajouter le **sélecteur** dans la section `*** Variables ***` de `web_ui.resource`, puis un mot-clé qui décrit l'action de l'utilisateur. Utiliser `Text` pour les libellés plutôt que de les recopier.
-3. Si la vérification est réutilisable, l'ajouter dans la section **vérifications** du fichier.
-4. Mettre les données de test (identifiants, textes, nombres attendus) dans `variables/`.
-5. Écrire le test dans la suite concernée, avec une `[Documentation]` qui explique **pourquoi** le test existe, et des `[Tags]`.
-6. Lancer `robocop check`, puis les tests.
-
-Exemple, pour tester les commentaires d'un post via JSONPlaceholder :
-
-```robotframework
-# resources/api.resource, section 3
-Get Post Comments
-    [Documentation]    ``GET /comments?postId=<id>`` : renvoie les commentaires d'un post.
-    [Arguments]    ${post_id}    ${expected_status}=200
-    VAR    &{params}    postId=${post_id}
-    ${comments}=    Call API    GET    /comments    ${expected_status}    params=${params}
-    RETURN    ${comments}
-```
-
----
-
-## 9. Limites connues
-
-### JSONPlaceholder
-
-JSONPlaceholder est une API de démonstration. Ses comportements surprenants sont documentés par des tests tagués `limite-api` : si l'un d'eux échoue un jour, c'est que l'API a changé et que d'autres tests sont à revoir.
-
-- **Les écritures ne sont pas conservées** : `POST`, `PUT` et `DELETE` renvoient la réponse attendue, mais rien n'est enregistré. Un post créé (id 101) est introuvable juste après. Les tests ne peuvent donc pas enchaîner *créer → relire → supprimer* : chaque test est indépendant.
-- **`DELETE` sur un post inexistant renvoie 200** : une suppression réussie ne prouve pas que le post existait.
-- **`PUT` sur un post inexistant renvoie 500** (erreur interne, en HTML), au lieu de 404.
-- **Les identifiants invalides** (`abc`, `0`, `-1`, `1.5`) renvoient 404 et non 400.
-- **Les tests dépendent du réseau** : sans Internet, ils échouent. Pour une campagne stable en intégration continue, on pourrait lancer [json-server](https://github.com/typicode/json-server), le serveur sur lequel repose JSONPlaceholder, en local, et le cibler avec `--variable BASE_URL:http://localhost:3000`.
-
-### Application web
-
-- **Elle dépend aussi de JSONPlaceholder** : ses tests échouent sans Internet.
-- **Les erreurs réseau** (API JSONPlaceholder injoignable, 502 ; délai dépassé, 504) ne sont pas testées de bout en bout : il faudrait couper JSONPlaceholder pendant l'exécution. Elles restent couvertes par les tests PyTest du projet précédent, qui simulent le réseau.
-- **L'interface doit être compilée** (`npm run build` dans `app/frontend/`, fait par `start-app.ps1`) : sans cela, l'application affiche « Interface non compilée » et les tests d'interface échouent.
-- **`app/` est une copie** : une correction faite dans le projet d'origine doit y être reportée (et inversement). Le commit d'origine (`a8f3def`) est indiqué dans `app/README.md`.
-- **Les tests vérifient les textes en français**, la langue par défaut de l'interface. Les textes attendus sont chargés depuis l'application (`UI_LANGUAGE`), mais rejouer la campagne en anglais demanderait aussi de choisir la langue à l'ouverture de chaque contexte de navigateur.
+- **Internet est nécessaire** : l'application interroge JSONPlaceholder en direct.
+- **Rien n'est vraiment enregistré** : JSONPlaceholder simule les créations, modifications et suppressions. L'application l'indique (« opération simulée ») et garde le résultat seulement dans l'onglet ouvert.
+- **L'interface doit être compilée** une fois (`.\start-app.ps1`) ; sinon la page reste blanche et tous les tests échouent en attendant le menu (`waiting for locator('header nav')`).
+- Les tests vérifient les textes **en français**, la langue par défaut.

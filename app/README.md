@@ -1,6 +1,6 @@
 # app/ — application web testée
 
-Ce dossier contient l'application web testée par `tests/web/` : une **API FastAPI** (`web_api.py`) qui sert aussi l'**interface Angular** (`frontend/`). Elle appelle l'API publique JSONPlaceholder.
+Ce dossier contient l'application web testée par `tests/` : une **API FastAPI** (`web_api.py`) qui sert aussi l'**interface Angular** (`frontend/`). Elle appelle l'API publique JSONPlaceholder.
 
 Elle est copiée du projet précédent [JSONPlaceholder-API-TEST](https://github.com/slowmfy/JSONPlaceholder-API-TEST) (commit `a8f3def`) pour que ce dépôt soit **autonome** : on peut lancer l'application et toute la campagne Robot Framework sans autre dépôt. Seule la partie web est reprise : le menu console et les tests PyTest restent dans le projet d'origine. Le code qui ne servait qu'au menu console a été retiré des fichiers copiés : raccourcis `get_users`, `create_post`, `update_post`... d'`api_client.py`, validateurs `parse_yes_no`, `parse_menu_choice`... de `validators.py`, journal `app.log` de `config.py`.
 
@@ -16,7 +16,7 @@ Depuis la racine du dépôt, une fois l'installation du README principal faite (
 
 `Ctrl+C` arrête le serveur. Au premier lancement, le script installe les dépendances Angular (`npm ci`) et compile l'interface.
 
-Les tests n'ont pas besoin qu'elle soit lancée : `tests/web/__init__.robot` la démarre avec le Python de `venv/` et l'arrête à la fin. Si elle tourne déjà (lancée avec `start-app.ps1`), les tests la réutilisent.
+Les tests n'ont pas besoin qu'elle soit lancée : `tests/__init__.robot` la démarre avec le Python de `venv/` et l'arrête à la fin. Si elle tourne déjà (lancée avec `start-app.ps1`), les tests la réutilisent.
 
 ## Contenu
 

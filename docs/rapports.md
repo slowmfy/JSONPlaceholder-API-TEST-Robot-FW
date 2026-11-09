@@ -134,7 +134,7 @@ C'est le fichier à **archiver** : à partir de lui, on peut tout recréer. Les 
 
 ## 4. Ce que les tests web ajoutent aux rapports
 
-Les tests de l'application web (`tests/web/`) produisent des informations supplémentaires, toutes reliées au même `log.html` :
+Les tests de l'interface web (`tests/`) produisent des informations supplémentaires, toutes reliées au même `log.html` :
 
 | Élément | Où | Contenu |
 |---|---|---|
@@ -153,7 +153,7 @@ should contain 'Leanne Graham' (str)
 
 La capture d'écran jointe montre aussitôt la cause : la recherche a trouvé Ervin Howell, qui habite Wisokyburgh. Sans elle, il aurait fallu relancer le test et observer la fenêtre du navigateur pour comprendre, ce qui est impossible en intégration continue (navigateur masqué, `HEADLESS=true`). Pour un test d'interface, la capture d'écran est souvent l'information la plus utile du rapport.
 
-Les tags `ui`, `web-api` et `jsonplaceholder` donnent aussi, dans `report.html`, un taux de réussite par niveau de test : si seuls les tests `ui` échouent, le problème vient de l'interface et non de l'API.
+Les tags (`users`, `posts`, `erreur`, `smoke`...) donnent aussi, dans `report.html`, un taux de réussite par thème : si seuls les tests `posts` échouent, le problème vient des pages des posts.
 
 ---
 

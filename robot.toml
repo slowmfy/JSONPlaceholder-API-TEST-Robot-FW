@@ -3,7 +3,7 @@
 #   - la commande « robotcode robot » (même exécution en ligne de commande).
 # La commande « robot » classique ne lit pas ce fichier : voir le README.
 
-name = "JSONPlaceholder API"
+name = "Application web JSONPlaceholder"
 paths = ["tests"]
 output-dir = "results"
 console-colors = "on"
@@ -17,18 +17,6 @@ includes = ["smoke"]
 description = "Cas d'erreur uniquement (tag erreur)"
 includes = ["erreur"]
 
-[profiles.jsonplaceholder]
-description = "API JSONPlaceholder uniquement, sans l'application web"
-includes = ["jsonplaceholder"]
-
-[profiles.web]
-description = "Application web : API FastAPI et interface Angular"
-includes = ["web"]
-
-[profiles.ui]
-description = "Interface Angular uniquement (navigateur)"
-includes = ["ui"]
-
 [profiles.invisible]
-description = "A combiner avec un autre profil : navigateur masqué (-p ui -p invisible)"
+description = "Navigateur masqué, plus rapide (combinable : -p smoke -p invisible)"
 variables = { HEADLESS = "True" }

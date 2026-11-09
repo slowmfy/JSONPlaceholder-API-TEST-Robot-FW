@@ -1,60 +1,56 @@
 *** Settings ***
-Documentation     Cas d'erreur transverses : identifiant invalide, ressource inexistante, timeout.
+Documentation     Messages d'erreur affichés à l'utilisateur.
 ...
-...               Ces scénarios sont regroupés dans une suite à part pour pouvoir être lancés
-...               ensemble (``robot --include erreur tests``) et pour que les suites ``users`` et
-...               ``posts`` restent centrées sur le comportement nominal de chaque ressource.
+...               On vérifie le message *vu à l'écran* (traduit), pas un code HTTP :
+...               c'est la différence entre un test d'interface et un test d'API.
 
-Resource          ../resources/api.resource
+Resource          ../resources/pages/users_page.resource
+Resource          ../resources/pages/user_detail_page.resource
+Resource          ../resources/pages/posts_page.resource
+Resource          ../resources/pages/post_detail_page.resource
+Variables         ../variables/test_data.py
 
-Suite Setup       Open API Session
-Suite Teardown    Close API Sessions
+Suite Setup       Open Test Browser
+Suite Teardown    Close Test Browser
+Test Setup        Open Application
+Test Teardown     Close Application
 
-Test Tags         jsonplaceholder    erreur
+Test Tags         erreur
 
 
 *** Test Cases ***
 Identifiant invalide
-    [Documentation]    Texte, zéro, négatif ou décimal : chaque identifiant invalide renvoie 404.
-    ...    Test piloté par les données : ``[Template]`` exécute le mot-clé pour chaque valeur
-    ...    de ``@{INVALID_IDS}`` et continue même si l'une d'elles échoue.
+    [Documentation]    « Accès direct » avec un identifiant invalide (abc, 0, -1) : un message
+    ...    explique l'erreur. Test piloté par les données : le [Template] est exécuté une fois
+    ...    par ligne de ``\${INVALID_USER_IDS}`` (fichier ``variables/test_data.py``).
     [Tags]    identifiant-invalide    users
-    [Template]    User Id Should Be Rejected
-    FOR    ${invalid_id}    IN    @{INVALID_IDS}
-        ${invalid_id}
+    [Template]    Invalid User Id Should Show Error
+    FOR    ${user_id}    ${expected_key}    IN    &{INVALID_USER_IDS}
+        ${user_id}    ${expected_key}
     END
 
-Ressource inexistante : post introuvable
-    [Documentation]    Un post absent du jeu de données renvoie 404 et un corps vide.
+Utilisateur inexistant
+    [Documentation]    La fiche d'un utilisateur inconnu affiche « Utilisateur 999 introuvable. ».
+    [Tags]    ressource-inexistante    users
+    Go To User Page    ${UNKNOWN_USER_ID}
+    ${message}=    Text    user_not_found    id=${UNKNOWN_USER_ID}
+    Error Alert Should Be    ${message}
+
+Post inexistant
+    [Documentation]    La page d'un post inconnu affiche « Post 9999 introuvable. ».
     [Tags]    ressource-inexistante    posts
-    ${body}=    Get Post    ${UNKNOWN_POST_ID}    expected_status=404
-    Response Body Should Be Empty    ${body}
+    Go To Post Page    ${UNKNOWN_POST_ID}
+    ${message}=    Text    post_not_found    id=${UNKNOWN_POST_ID}
+    Error Alert Should Be    ${message}
 
-Ressource inexistante : route inconnue
-    [Documentation]    Une ressource que l'API ne propose pas renvoie 404.
-    [Tags]    ressource-inexistante
-    ${body}=    Get Resource    ${UNKNOWN_RESOURCE}    expected_status=404
-    Response Body Should Be Empty    ${body}
-
-Ressource inexistante : modification d'un post introuvable
-    [Documentation]    Limite connue de JSONPlaceholder : un PUT sur un post absent renvoie
-    ...    500 (erreur interne, en HTML) au lieu de 404. Le client Python du projet précédent
-    ...    vérifiait donc l'existence du post avant de le modifier.
-    [Tags]    ressource-inexistante    limite-api    posts
-    ${body}=    Update Post    ${UNKNOWN_POST_ID}    ${EXISTING_USER_ID}
-    ...    ${UPDATED_POST_TITLE}    ${UPDATED_POST_BODY}    expected_status=500
-    Should Contain    ${body}    TypeError
-
-Ressource inexistante : suppression d'un post introuvable
-    [Documentation]    Limite connue de JSONPlaceholder : un DELETE sur un post absent renvoie
-    ...    200 comme s'il existait. Une suppression réussie ne prouve donc pas que le post existait.
-    [Tags]    ressource-inexistante    limite-api    posts
-    ${body}=    Delete Post    ${UNKNOWN_POST_ID}    expected_status=200
-    Response Body Should Be Empty    ${body}
-
-Timeout simulé
-    [Documentation]    Une réponse qui n'arrive pas dans le délai imparti interrompt la requête.
-    ...    Le délai est réduit à 1 ms sur une session dédiée : le timeout est réel,
-    ...    déclenché par la bibliothèque requests, et non simulé par un faux serveur.
-    [Tags]    timeout
-    Request Should Time Out    /users
+Créer un post sans titre
+    [Documentation]    Le titre est obligatoire : l'erreur s'affiche sous le champ et aucun
+    ...    message de réussite n'apparaît.
+    [Tags]    validation    posts
+    Go To Posts Page
+    Open Post Creation Form
+    Fill Post Form    user_id=${EXISTING_USER_ID}    title=${EMPTY}    body=${NEW_POST_BODY}
+    Submit Form
+    ${message}=    Text    error_required
+    Field Error Should Be    title    ${message}
+    No Write Message Should Be Shown
